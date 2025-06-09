@@ -1,0 +1,17 @@
+database:
+  postgres:
+    enabled: false
+  mysql:
+    enabled: true
+    host: "host"
+    user: "user"
+    password: "password"
+    db: "db"
+
+tpch:
+  enabled: true
+  path: "path/to/tpch"
+
+tpcds:
+  enabled: false
+  path: "path/to/tpcds"
