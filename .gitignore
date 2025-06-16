@@ -7,5 +7,5 @@ dist/
 build/
 .hypothesis
 .pytest_cache
-app/config/local
+app/config/local/
 .nicegui
