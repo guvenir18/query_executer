@@ -1,0 +1,11 @@
+venv
+.run
+.idea
+__pycache__/
+/artifacts
+dist/
+build/
+.hypothesis
+.pytest_cache
+app/config/local
+.nicegui
