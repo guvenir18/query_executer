@@ -45,6 +45,9 @@ query_table_rows = []
 @ui.page("/")
 def main_page():
     def execute_query(query, db_type):
+        """
+        Execute given query
+        """
         if db_type == "MySQL":
             _, time = mysql_client.execute_query(query)
         elif db_type == "Postgres":
@@ -77,6 +80,9 @@ def main_page():
         })
 
     def update_code_block():
+        """
+        Updates SQL code inspection block
+        """
         code_block.content = query_table.selected[0]["query"]
         code_block.update()
         variable_parameters.refresh()
@@ -116,26 +122,47 @@ def main_page():
                         var_input_handles.append(var_input)
                 ui.button("Start Query Execution", on_click=execute_selected_query)
 
+    @ui.refreshable
+    def database_info():
+        if dropdown_bm.value and dropdown_db.value:
+            ui.label(f"Server: {dropdown_db.value}")
+            ui.label(f"Database: {dropdown_bm.value}")
+            ui.label(f"Size of database: {db_clients[dropdown_db.value].get_size_of_database(dropdown_bm.value)} MB")
+
+    def on_change_dropdown_bm():
+        db_clients[db_list[0]].set_database(dropdown_db.value)
+        database_info.refresh()
+
+    # UI code starts here
     with ui.row():
         with ui.column():
             with ui.grid(columns="300px auto auto auto auto"):
+                # SQL Code editor
                 with ui.card():
                     sql_editor = ui.codemirror()
+                # Database select
                 with ui.card():
                     with ui.column():
                         db_list = list(db_clients.keys())
                         name_input = ui.input(label="Query Name")
-                        dropdown_db = ui.select(options=db_list, label="Database")
-                        dropdown_bm = ui.select(options=["TPC-H", "TPC-DS"], label="Benchmark")
-                        save_bn = ui.button(text="Save Query", on_click=save_query)
+                        ui.label("Server")
+                        dropdown_db = ui.select(options=db_list, label="Server", value=db_list[0])
+                        ui.label("Database")
+                        current_db = dropdown_db.value
+                        dropdown_bm = ui.select(options=db_clients[current_db].get_databases(), label="Database", on_change=on_change_dropdown_bm)
+                        ui.button(text="Save Query", on_click=save_query)
+                    database_info()
+                # Query template table
                 query_table = ui.table(rows=query_table_rows, columns=query_table_columns, row_key='name', on_select=update_code_block)
                 query_table.set_selection('single')
+                # Query inspection
                 with ui.card():
                     ui.label("Inspect Selected Query")
                     code_block = ui.code(language="sql").classes('w-full')
+                # Variable values
                 variable_parameters()
 
-
+            # Query results table
             table = ui.table(columns=result_table_columns, rows=result_table_rows)
             ui.button(
                 "Download Results",

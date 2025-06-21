@@ -32,24 +32,36 @@ class MysqlClient:
         except Exception as e:
             print("Query Failed: ", e)
 
-    def switch_database(self, database_name: str):
+    def set_database(self, database_name: str):
         """
-        Switch database
+        Set database
         :param database_name:
         :return:
         """
         self.cursor.execute(f"USE {database_name};")
 
-    def get_tpch_table_size(self):
-        query = """
+    def get_size_of_database(self, database: str):
+        """
+        Get size of current selected database
+        """
+        query = f"""
             SELECT 
                 ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS size_mb
             FROM 
                 information_schema.tables
             WHERE 
-                table_schema = 'tpch'
+                table_schema = "{database}"
             GROUP BY 
                 table_schema;
         """
         self.cursor.execute(query)
         return self.cursor.fetchone()[0]
+
+    def get_databases(self):
+        """
+        Returns all databases from a MySQL connection
+        """
+        system_dbs = {'information_schema', 'mysql', 'performance_schema', 'sys'}  # Filter out internal MYSQL databases
+        query = "SHOW DATABASES;"
+        self.cursor.execute(query)
+        return [row[0] for row in self.cursor.fetchall() if row[0] not in system_dbs]
