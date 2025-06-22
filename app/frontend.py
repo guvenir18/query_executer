@@ -67,18 +67,28 @@ def main_page():
         benchmark_query = BenchmarkQuery(
             query=query,
             parameters=parameters,
-            db=dropdown_db.value,
+            database=dropdown_db.value,
             benchmark=dropdown_bm.value,
             name=name_input.value
         )
         benchmark_query_list.append(benchmark_query)
-        query_table.add_row({
+        new_query = {
             'name': benchmark_query.name,
-            'database': benchmark_query.db,
+            'database': benchmark_query.database,
             'benchmark': benchmark_query.benchmark,
             'query': benchmark_query.query,
             'parameters': benchmark_query.parameters
-        })
+        }
+        add_query_to_table(new_query)
+
+    def add_query_to_table(new_query):
+        """
+        Add a new query to the table
+        """
+        if any(query['name'] == new_query['name'] for query in query_table.rows):
+            ui.notify(f"Query with name {new_query['name']} already exists")
+            return
+        query_table.add_row(new_query)
 
     def update_code_block():
         """
@@ -145,10 +155,10 @@ def main_page():
         Callback for "Import Queries" upload block
         """
         text = e.content.read().decode("utf-8")
-        data = json.loads(text)
-        benchmark_query_list.extend(data)
-        for benchmark_query in benchmark_query_list:
-            query_table.add_row(benchmark_query)
+        data_list = json.loads(text)
+        for data in data_list:
+            benchmark_query_list.append(BenchmarkQuery.from_dict(data))
+            add_query_to_table(data)
         ui.notify("Upload done")
 
     # UI code starts here

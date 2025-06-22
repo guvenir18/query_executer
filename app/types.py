@@ -15,10 +15,10 @@ class QueryParameter:
 
 
 class BenchmarkQuery:
-    def __init__(self, query: str, parameters: List[QueryParameter], db: str, benchmark: str, name: str):
+    def __init__(self, query: str, parameters: List[QueryParameter], database: str, benchmark: str, name: str):
         self.query = query
         self.parameters = parameters
-        self.db = db
+        self.database = database
         self.name = name
         self.benchmark = benchmark
         self.name = name
@@ -28,7 +28,7 @@ class BenchmarkQuery:
         return cls(
             query=data['query'],
             parameters=[QueryParameter.from_dict(p) for p in data['parameters']],
-            db=data['db'],
+            database=data['database'],
             benchmark=data['benchmark'],
             name=data['name']
         )
@@ -37,7 +37,7 @@ class BenchmarkQuery:
         return {
             'query': self.query,
             'parameters': [p.to_dict() for p in self.parameters],
-            'db': self.db,
+            'database': self.database,
             'benchmark': self.benchmark,
             'name': self.name,
         }
