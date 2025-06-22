@@ -2,7 +2,8 @@ import json
 from typing import List, Tuple
 
 from fastapi import FastAPI
-from nicegui import ui
+from nicegui import ui, events
+from nicegui.events import UploadEventArguments
 
 from app.config import load_config
 from app.helpers import extract_variables, build_all_queries
@@ -133,6 +134,23 @@ def main_page():
         db_clients[db_list[0]].set_database(dropdown_db.value)
         database_info.refresh()
 
+    def on_click_import_queries():
+        """
+        Callback for "Import Queries" button
+        """
+        ui.download.content(json.dumps([bq.to_dict() for bq in benchmark_query_list]))
+
+    def on_upload_import_queries(e: events.UploadEventArguments):
+        """
+        Callback for "Import Queries" upload block
+        """
+        text = e.content.read().decode("utf-8")
+        data = json.loads(text)
+        benchmark_query_list.extend(data)
+        for benchmark_query in benchmark_query_list:
+            query_table.add_row(benchmark_query)
+        ui.notify("Upload done")
+
     # UI code starts here
     with ui.row():
         with ui.column():
@@ -142,16 +160,22 @@ def main_page():
                     sql_editor = ui.codemirror()
                 # Database select
                 with ui.card():
-                    with ui.column():
-                        db_list = list(db_clients.keys())
-                        name_input = ui.input(label="Query Name")
-                        ui.label("Server")
-                        dropdown_db = ui.select(options=db_list, label="Server", value=db_list[0])
-                        ui.label("Database")
-                        current_db = dropdown_db.value
-                        dropdown_bm = ui.select(options=db_clients[current_db].get_databases(), label="Database", on_change=on_change_dropdown_bm)
-                        ui.button(text="Save Query", on_click=save_query)
-                    database_info()
+                    with ui.row():
+                        with ui.column():
+                            db_list = list(db_clients.keys())
+                            name_input = ui.input(label="Query Name")
+                            ui.label("Server")
+                            dropdown_db = ui.select(options=db_list, label="Server", value=db_list[0])
+                            ui.label("Database")
+                            current_db = dropdown_db.value
+                            dropdown_bm = ui.select(options=db_clients[current_db].get_databases(), label="Database", on_change=on_change_dropdown_bm)
+                            ui.button(text="Save Query", on_click=save_query)
+                            database_info()
+                        with ui.column():
+                            ui.button("Delete Selected")
+                            ui.button("Export Queries", on_click=on_click_import_queries)
+                            ui.label("Import Queries")
+                            ui.upload(on_upload=on_upload_import_queries).classes('w-[200px]')
                 # Query template table
                 query_table = ui.table(rows=query_table_rows, columns=query_table_columns, row_key='name', on_select=update_code_block)
                 query_table.set_selection('single')
