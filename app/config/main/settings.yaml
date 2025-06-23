@@ -1,4 +1,5 @@
 database:
+  # Partial support
   postgres:
     enabled: false
   mysql:
@@ -7,11 +8,6 @@ database:
     user: "user"
     password: "password"
     db: "db"
-
-tpch:
-  enabled: true
-  path: "path/to/tpch"
-
-tpcds:
-  enabled: false
-  path: "path/to/tpcds"
+  # Not supported yet
+  duckdb:
+    enabled: false

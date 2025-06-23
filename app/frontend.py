@@ -24,10 +24,17 @@ if config.database.postgres.enabled:
 
 
 result_table_columns = [
+    {'name': 'server', 'label': 'Server', 'field': 'server', 'required': True},
     {'name': 'database', 'label': 'Database', 'field': 'database', 'required': True},
-    {'name': 'benchmark', 'label': 'Benchmark', 'field': 'benchmark', 'required': True},
     {'name': 'query', 'label': 'Query', 'field': 'query', 'required': True},
     {'name': 'runtime', 'label': 'Runtime', 'field': 'runtime', 'required': True},
+    {'name': 'rows', 'label': 'Rows Executed', 'field': 'rows', 'required': True},
+    {'name': 'var_1', 'label': 'Variable 1', 'field': 'var_1', 'required': False},
+    {'name': 'val_1', 'label': 'Value', 'field': 'val_1', 'required': False},
+    {'name': 'var_2', 'label': 'Variable 2', 'field': 'var_2', 'required': False},
+    {'name': 'val_2', 'label': 'Value', 'field': 'val_2', 'required': False},
+    {'name': 'var_3', 'label': 'Variable 3', 'field': 'var_3', 'required': False},
+    {'name': 'val_3', 'label': 'Value', 'field': 'val_3', 'required': False},
 ]
 
 result_table_rows = []
@@ -49,15 +56,19 @@ def main_page():
         """
         Execute given query
         """
+        # TODO: Postgres support
+        result = None
         if db_type == "MySQL":
-            _, time = mysql_client.execute_query(query)
+            result = mysql_client.analyze_query(query)
         elif db_type == "Postgres":
             _, time = postgres_client.execute_query(query)
         else:
             time = 0
-        table.add_row({"database": db_type, "benchmark": dropdown_bm.value, "query": "Query 1", "runtime": time})
+        time, rows = mysql_client.parse_explain_output(result[0][0])
+        return time, rows
 
-    def save_query():
+
+    def on_click_save_query():
         """
         Save current query on SQL editor into query table
         """
@@ -88,6 +99,7 @@ def main_page():
         if any(query['name'] == new_query['name'] for query in query_table.rows):
             ui.notify(f"Query with name {new_query['name']} already exists")
             return
+
         query_table.add_row(new_query)
 
     def update_code_block():
@@ -100,7 +112,7 @@ def main_page():
 
     @ui.refreshable
     def variable_parameters():
-        def execute_selected_query():
+        def on_click_start_query_execution():
             """
             Executes selected query iterating over parameter range values
             """
@@ -109,13 +121,29 @@ def main_page():
                 range_value_string = handle.value
                 range_value = tuple(int(x.strip()) for x in range_value_string.split(","))
                 range_values.append({'name': handle.label, 'range': range_value, 'type': 'INT'})
-            query = query_table.selected[0]['query']
-            db_type = query_table.selected[0]['database']
-            print(query)
+            query_template = query_table.selected[0]
+            query = query_template['query']
+            db_type = query_template['database']
             queries = build_all_queries(query, range_values)
-            print(queries)
             for q in queries:
-                execute_query(q, db_type)
+                var_data = q.variables
+                time, rows = execute_query(q.query, db_type)
+                result_table.add_row(
+                    {
+                        'server':  db_type,
+                        'database': query_template['benchmark'],
+                        'query': query_template['name'],
+                        'runtime': time,
+                        'rows': rows,
+                        'var_1': var_data[0]['name'] if len(var_data) > 0 and 'name' in var_data[0] else '',
+                        'val_1': var_data[0]['value'] if len(var_data) > 0 and 'value' in var_data[0] else '',
+                        'var_2': var_data[1]['name'] if len(var_data) > 1 and 'name' in var_data[1] else '',
+                        'val_2': var_data[1]['value'] if len(var_data) > 1 and 'value' in var_data[1] else '',
+                        'var_3': var_data[2]['name'] if len(var_data) > 2 and 'name' in var_data[2] else '',
+                        'val_3': var_data[2]['value'] if len(var_data) > 2 and 'value' in var_data[2] else '',
+                    }
+                )
+
 
         with ui.card():
             ui.label("Range Values for Parameters")
@@ -131,7 +159,7 @@ def main_page():
                             f"Range values for Parameter: {var_name}, Type: {variable.get("data_type")}")
                         var_input = ui.input(label=var_name)
                         var_input_handles.append(var_input)
-                ui.button("Start Query Execution", on_click=execute_selected_query)
+                ui.button("Start Query Execution", on_click=on_click_start_query_execution)
 
     @ui.refreshable
     def database_info():
@@ -179,7 +207,7 @@ def main_page():
                             ui.label("Database")
                             current_db = dropdown_db.value
                             dropdown_bm = ui.select(options=db_clients[current_db].get_databases(), label="Database", on_change=on_change_dropdown_bm)
-                            ui.button(text="Save Query", on_click=save_query)
+                            ui.button(text="Save Query", on_click=on_click_save_query)
                             database_info()
                         with ui.column():
                             ui.button("Delete Selected")
@@ -197,7 +225,7 @@ def main_page():
                 variable_parameters()
 
             # Query results table
-            table = ui.table(columns=result_table_columns, rows=result_table_rows)
+            result_table = ui.table(columns=result_table_columns, rows=result_table_rows)
             ui.button(
                 "Download Results",
                 on_click=lambda: ui.download.content(json.dumps(result_table_rows), "results.json")

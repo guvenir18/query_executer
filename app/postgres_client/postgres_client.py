@@ -36,15 +36,6 @@ class PostgresClient:
             f"password={config.database.postgres.password} "
         )
 
-    def set_schema(self, schema: str):
-        """
-        Set database schema
-        :param schema:
-        :return:
-        """
-        self.cur.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
-        return self
-
     def execute_query(self, query: str):
         """
         Execute given query
@@ -60,3 +51,23 @@ class PostgresClient:
         except Exception as e:
             print("Query failed: ", e)
             self.conn.rollback()
+
+    def set_database(self, database_name: str):
+        """
+        Set database
+        :param database_name:
+        :return:
+        """
+        # TODO: Implement
+
+    def get_size_of_database(self, database: str):
+        """
+        Get size of current selected database
+        """
+        # TODO: Implement
+
+    def get_databases(self):
+        """
+        Returns all databases from a Postgres connection
+        """
+        # TODO: Implement

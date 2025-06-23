@@ -1,7 +1,7 @@
 import re
 from typing import List
 import itertools
-from app.types import QueryParameter
+from app.types import QueryParameter, ReadyQuery
 
 
 def extract_variables(query: str) -> List[QueryParameter]:
@@ -58,6 +58,7 @@ def build_all_queries(template: str, variable_ranges: list) -> list:
             for name, value in zip(variable_names, combo)
         ]
         query = build_single_query(template, variable_values)
-        all_queries.append(query)
+        ready_query = ReadyQuery(query, variable_values)
+        all_queries.append(ready_query)
 
     return all_queries

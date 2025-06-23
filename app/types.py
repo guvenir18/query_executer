@@ -14,6 +14,12 @@ class QueryParameter:
         return asdict(self)
 
 
+@dataclass
+class ReadyQuery:
+    query: str
+    variables: list[dict]
+
+
 class BenchmarkQuery:
     def __init__(self, query: str, parameters: List[QueryParameter], database: str, benchmark: str, name: str):
         self.query = query

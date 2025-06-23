@@ -1,3 +1,4 @@
+import re
 import time
 
 import mysql.connector
@@ -32,6 +33,14 @@ class MysqlClient:
         except Exception as e:
             print("Query Failed: ", e)
 
+    def analyze_query(self, query: str):
+        try:
+            self.cursor.execute(f"EXPLAIN ANALYZE {query}")
+            results = self.cursor.fetchall()
+            return results
+        except Exception as e:
+            print("Query Analyze Failed: ", e)
+
     def set_database(self, database_name: str):
         """
         Set database
@@ -65,3 +74,20 @@ class MysqlClient:
         query = "SHOW DATABASES;"
         self.cursor.execute(query)
         return [row[0] for row in self.cursor.fetchall() if row[0] not in system_dbs]
+
+    def parse_explain_output(self, explain_result: str):
+        """
+        Parse output of EXPLAIN ANALYZE query and extract total execution time and rows affected
+        """
+        text = explain_result.replace('\n', ' ')
+
+        total_time_match = re.search(
+            r'->\s*Sort:.*?\(actual time=\d+\.?\d*\.\.(\d+\.?\d*)', text)
+
+        filter_match = re.search(
+            r'->\s*Filter:.*?actual time=\d+\.?\d*\.\.\d+\.?\d*\s+rows=([\d\.eE\+]+)', text)
+
+        total_time = float(total_time_match.group(1)) if total_time_match else None
+        filter_rows = float(filter_match.group(1)) if filter_match else None
+
+        return total_time, filter_rows
