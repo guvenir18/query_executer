@@ -1,4 +1,5 @@
 import json
+import time
 from typing import List, Tuple
 
 from fastapi import FastAPI
@@ -57,6 +58,9 @@ def main_page():
         Execute given query
         """
         # TODO: Postgres support
+        # TODO: How to filter EXPLAIN ANALYZE outputs ? What info need ?
+        # TODO: Make batch execution async and add a queue for multiple batches
+        # TODO: Split this page generation into different modules/functions
         result = None
         if db_type == "MySQL":
             result = mysql_client.analyze_query(query)
@@ -125,6 +129,8 @@ def main_page():
             query = query_template['query']
             db_type = query_template['database']
             queries = build_all_queries(query, range_values)
+            print("Starting Query Batch")
+            i = 0
             for q in queries:
                 var_data = q.variables
                 time, rows = execute_query(q.query, db_type)
@@ -143,6 +149,8 @@ def main_page():
                         'val_3': var_data[2]['value'] if len(var_data) > 2 and 'value' in var_data[2] else '',
                     }
                 )
+                print(f"Query N:[{i}/{len(queries)}] Done")
+                i = i + 1
 
 
         with ui.card():
@@ -169,7 +177,8 @@ def main_page():
             ui.label(f"Size of database: {db_clients[dropdown_db.value].get_size_of_database(dropdown_bm.value)} MB")
 
     def on_change_dropdown_bm():
-        db_clients[db_list[0]].set_database(dropdown_db.value)
+        current_db = dropdown_db.value
+        db_clients[current_db].set_database(dropdown_bm.value)
         database_info.refresh()
 
     def on_click_import_queries():
@@ -189,6 +198,16 @@ def main_page():
             add_query_to_table(data)
         ui.notify("Upload done")
 
+    def on_change_dropdown_db():
+        """
+        Callback for when database server changes (postgres or mysql)
+        """
+        current_db = dropdown_db.value
+        new_bm_list = db_clients[current_db].get_databases()
+        dropdown_bm.options = new_bm_list
+        dropdown_bm.value = new_bm_list[0] if len(new_bm_list) > 0 else None
+        dropdown_bm.update()
+
     # UI code starts here
     with ui.row():
         with ui.column():
@@ -200,13 +219,15 @@ def main_page():
                 with ui.card():
                     with ui.row():
                         with ui.column():
-                            db_list = list(db_clients.keys())
                             name_input = ui.input(label="Query Name")
+                            db_list = list(db_clients.keys())
                             ui.label("Server")
-                            dropdown_db = ui.select(options=db_list, label="Server", value=db_list[0])
-                            ui.label("Database")
+                            dropdown_db = ui.select(options=db_list, label="Server",
+                                                    value=db_list[0],
+                                                    on_change=on_change_dropdown_db)
                             current_db = dropdown_db.value
-                            dropdown_bm = ui.select(options=db_clients[current_db].get_databases(), label="Database", on_change=on_change_dropdown_bm)
+                            bm_list = db_clients[current_db].get_databases()
+                            dropdown_bm = ui.select(options=bm_list, label="Database", value=bm_list[0] if len(bm_list) > 0 else None, on_change=on_change_dropdown_bm)
                             ui.button(text="Save Query", on_click=on_click_save_query)
                             database_info()
                         with ui.column():

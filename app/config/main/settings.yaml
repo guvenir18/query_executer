@@ -1,7 +1,12 @@
 database:
   # Partial support
   postgres:
-    enabled: false
+    enabled: true
+    host: "host"
+    port: 5432
+    database: "database"
+    username: "user"
+    password: "password"
   mysql:
     enabled: true
     host: "host"

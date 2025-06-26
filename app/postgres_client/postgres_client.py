@@ -20,8 +20,6 @@ class PostgresClient:
         self.conn = self.start_connection()
         self.cur = self.conn.cursor()
 
-        self.addressbook_schema = config.database.addressbook.schema
-
     def start_connection(self) -> Connection:
         """
         Start a Postgres connection
@@ -31,7 +29,7 @@ class PostgresClient:
             f""
             f"host={config.database.postgres.host} "
             f"port={config.database.postgres.port} "
-            f"dbname={config.database.postgres.name} "
+            f"dbname={config.database.postgres.database} "
             f"user={config.database.postgres.username} "
             f"password={config.database.postgres.password} "
         )
@@ -54,20 +52,36 @@ class PostgresClient:
 
     def set_database(self, database_name: str):
         """
-        Set database
-        :param database_name:
-        :return:
+        Set (switch to) another Postgres database
         """
-        # TODO: Implement
+        self.cur.close()
+        self.conn.close()
+        self.conn = psycopg.connect(
+            f"" 
+            f"host={config.database.postgres.host} "
+            f"port={config.database.postgres.port} "
+            f"dbname={database_name} "
+            f"user={config.database.postgres.username} "
+            f"password={config.database.postgres.password} "
+        )
+        self.cur = self.conn.cursor()
 
     def get_size_of_database(self, database: str):
         """
-        Get size of current selected database
+        Get size (in MB) of a given PostgreSQL database
         """
-        # TODO: Implement
+        query = f"""
+            SELECT ROUND(pg_database_size(%s) / 1024 / 1024, 2) AS size_mb;
+        """
+        self.cur.execute(query, (database,))
+        result = self.cur.fetchone()
+        return result[0] if result else 0.0
 
     def get_databases(self):
         """
-        Returns all databases from a Postgres connection
+        Returns all user-created databases from a Postgres connection
         """
-        # TODO: Implement
+        system_dbs = {'template0', 'template1', 'postgres'}
+        query = "SELECT datname FROM pg_database WHERE datistemplate = false;"
+        self.cur.execute(query)
+        return [row[0] for row in self.cur.fetchall() if row[0] not in system_dbs]
