@@ -1,11 +1,10 @@
+import asyncio
 import json
-import time
-from typing import List, Tuple
 
 from fastapi import FastAPI
 from nicegui import ui, events
-from nicegui.events import UploadEventArguments
 
+from app.async_queue import QueueWorker
 from app.config import load_config
 from app.helpers import extract_variables, build_all_queries
 from app.postgres_client.postgres_client import PostgresClient
@@ -14,6 +13,8 @@ from mysql_client.mysql_client import MysqlClient
 
 config = load_config()
 db_clients = {}
+
+
 
 if config.database.mysql.enabled:
     mysql_client = MysqlClient()
@@ -25,17 +26,11 @@ if config.database.postgres.enabled:
 
 
 result_table_columns = [
+    {'name': 'id', 'label': 'Id', 'field': 'id', 'required': True},
     {'name': 'server', 'label': 'Server', 'field': 'server', 'required': True},
     {'name': 'database', 'label': 'Database', 'field': 'database', 'required': True},
     {'name': 'query', 'label': 'Query', 'field': 'query', 'required': True},
-    {'name': 'runtime', 'label': 'Runtime', 'field': 'runtime', 'required': True},
-    {'name': 'rows', 'label': 'Rows Executed', 'field': 'rows', 'required': True},
-    {'name': 'var_1', 'label': 'Variable 1', 'field': 'var_1', 'required': False},
-    {'name': 'val_1', 'label': 'Value', 'field': 'val_1', 'required': False},
-    {'name': 'var_2', 'label': 'Variable 2', 'field': 'var_2', 'required': False},
-    {'name': 'val_2', 'label': 'Value', 'field': 'val_2', 'required': False},
-    {'name': 'var_3', 'label': 'Variable 3', 'field': 'var_3', 'required': False},
-    {'name': 'val_3', 'label': 'Value', 'field': 'val_3', 'required': False},
+    {'name': 'download', 'label': 'Download', 'field': 'download', 'required': True},
 ]
 
 result_table_rows = []
@@ -50,27 +45,68 @@ query_table_columns = [
 
 query_table_rows = []
 
+batch_results = []
 
 @ui.page("/")
 def main_page():
-    def execute_query(query, db_type):
-        """
-        Execute given query
-        """
-        # TODO: Postgres support
-        # TODO: How to filter EXPLAIN ANALYZE outputs ? What info need ?
-        # TODO: Make batch execution async and add a queue for multiple batches
-        # TODO: Split this page generation into different modules/functions
-        result = None
-        if db_type == "MySQL":
-            result = mysql_client.analyze_query(query)
-        elif db_type == "Postgres":
-            _, time = postgres_client.execute_query(query)
-        else:
-            time = 0
-        time, rows = mysql_client.parse_explain_output(result[0][0])
-        return time, rows
+    total_executed_batch = 0
+    queries_in_queue = 0
 
+    async def execute_query_batch(queries, query_template):
+        global batch_results
+        nonlocal total_executed_batch
+        nonlocal queries_in_queue
+        db_type = query_template['database']
+        query_results = []
+        print(f"Starting Query Batch {total_executed_batch}")
+        i = 0
+        for q in queries:
+
+            var_data = q.variables
+            time = await execute_query(q.query, db_type)
+            query_results.append(
+                {
+                    'server': db_type,
+                    'database': query_template['benchmark'],
+                    'query': query_template['name'],
+                    'runtime': time,
+                    'var_1': var_data[0]['name'] if len(var_data) > 0 and 'name' in var_data[0] else '',
+                    'val_1': var_data[0]['value'] if len(var_data) > 0 and 'value' in var_data[0] else '',
+                    'var_2': var_data[1]['name'] if len(var_data) > 1 and 'name' in var_data[1] else '',
+                    'val_2': var_data[1]['value'] if len(var_data) > 1 and 'value' in var_data[1] else '',
+                    'var_3': var_data[2]['name'] if len(var_data) > 2 and 'name' in var_data[2] else '',
+                    'val_3': var_data[2]['value'] if len(var_data) > 2 and 'value' in var_data[2] else '',
+                }
+            )
+            print(f"Query N:[{i}/{len(queries)}] Done")
+            queue_information.refresh(i, len(queries), True)
+            i = i + 1
+        result_table.add_row(
+            {
+                'id': total_executed_batch,
+                'server': db_type,
+                'database': query_template['benchmark'],
+                'query': query_template['name'],
+            }
+        )
+        batch_results.append(query_results)
+        total_executed_batch += 1
+        queries_in_queue -= 1
+        queue_information.refresh(0, 0, False)
+
+    async def execute_query(query, db_type):
+        def run_sync():
+            if db_type == "MySQL":
+                _, duration = mysql_client.execute_query(query)
+            elif db_type == "Postgres":
+                _, duration = postgres_client.execute_query(query)
+            else:
+                duration = 0
+            return duration
+
+        return await asyncio.to_thread(run_sync)
+
+    query_worker = QueueWorker(execute_query_batch)
 
     def on_click_save_query():
         """
@@ -120,6 +156,7 @@ def main_page():
             """
             Executes selected query iterating over parameter range values
             """
+            nonlocal queries_in_queue
             range_values = []
             for handle in var_input_handles:
                 range_value_string = handle.value
@@ -129,29 +166,10 @@ def main_page():
             query = query_template['query']
             db_type = query_template['database']
             queries = build_all_queries(query, range_values)
-            print("Starting Query Batch")
-            i = 0
-            for q in queries:
-                var_data = q.variables
-                time, rows = execute_query(q.query, db_type)
-                result_table.add_row(
-                    {
-                        'server':  db_type,
-                        'database': query_template['benchmark'],
-                        'query': query_template['name'],
-                        'runtime': time,
-                        'rows': rows,
-                        'var_1': var_data[0]['name'] if len(var_data) > 0 and 'name' in var_data[0] else '',
-                        'val_1': var_data[0]['value'] if len(var_data) > 0 and 'value' in var_data[0] else '',
-                        'var_2': var_data[1]['name'] if len(var_data) > 1 and 'name' in var_data[1] else '',
-                        'val_2': var_data[1]['value'] if len(var_data) > 1 and 'value' in var_data[1] else '',
-                        'var_3': var_data[2]['name'] if len(var_data) > 2 and 'name' in var_data[2] else '',
-                        'val_3': var_data[2]['value'] if len(var_data) > 2 and 'value' in var_data[2] else '',
-                    }
-                )
-                print(f"Query N:[{i}/{len(queries)}] Done")
-                i = i + 1
-
+            query_worker.schedule_callback(queries, query_template)
+            print("Query added to queue")
+            queries_in_queue += 1
+            queue_information.refresh(0, 0, False)
 
         with ui.card():
             ui.label("Range Values for Parameters")
@@ -208,6 +226,26 @@ def main_page():
         dropdown_bm.value = new_bm_list[0] if len(new_bm_list) > 0 else None
         dropdown_bm.update()
 
+    def on_row_download_result(msg):
+        """
+        Callback for download button of row
+        """
+        id = msg.args['key']
+        row = msg.args['row']
+        server = row["server"]
+        db = row["database"]
+        q = row["query"]
+        ui.download.content(json.dumps(batch_results[id]), f"{server}_{db}_{q}_{id}.json")
+
+    @ui.refreshable
+    def queue_information(i=0, total=0, executing=False):
+        ui.label("Queue Information")
+        ui.label(f"Query batch in queue: {queries_in_queue}")
+        if executing:
+            ui.label(f"Query Completed N:{i+1}/{total}")
+        else:
+            ui.label("No queries are executing currently")
+
     # UI code starts here
     with ui.row():
         with ui.column():
@@ -246,11 +284,21 @@ def main_page():
                 variable_parameters()
 
             # Query results table
-            result_table = ui.table(columns=result_table_columns, rows=result_table_rows)
-            ui.button(
-                "Download Results",
-                on_click=lambda: ui.download.content(json.dumps(result_table_rows), "results.json")
-            )
+            with ui.row():
+                with ui.card():
+                    ui.label("Query Execution Results")
+                    result_table = ui.table(columns=result_table_columns, rows=result_table_rows, row_key='id')
+                    result_table.add_slot(
+                        "body-cell-download",
+                        """
+                        <q-td :props="props">
+                            <q-btn @click="$parent.$emit('action', props)" icon="download" flat />
+                        </q-td>
+                    """,
+                    )
+                    result_table.on("action", on_row_download_result)
+                with ui.card():
+                    queue_information()
 
 
 def init(fastapi_app: FastAPI) -> None:
