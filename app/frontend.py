@@ -12,18 +12,21 @@ from app.types import BenchmarkQuery
 from mysql_client.mysql_client import MysqlClient
 
 config = load_config()
-db_clients = {}
 
+def start_db_connections():
+    clients = {}
 
+    if config.database.mysql.enabled:
+        mysql_client = MysqlClient()
+        clients["MySQL"] = mysql_client
 
-if config.database.mysql.enabled:
-    mysql_client = MysqlClient()
-    db_clients["MySQL"] = mysql_client
+    if config.database.postgres.enabled:
+        postgres_client = PostgresClient()
+        clients["Postgres"] = postgres_client
 
-if config.database.postgres.enabled:
-    postgres_client = PostgresClient()
-    db_clients["Postgres"] = postgres_client
+    return clients
 
+db_clients = start_db_connections()
 
 result_table_columns = [
     {'name': 'id', 'label': 'Id', 'field': 'id', 'required': True},
@@ -51,6 +54,7 @@ batch_results = []
 def main_page():
     total_executed_batch = 0
     queries_in_queue = 0
+    db_clients_local = start_db_connections()
 
     async def execute_query_batch(queries, query_template):
         global batch_results
@@ -97,9 +101,9 @@ def main_page():
     async def execute_query(query, db_type):
         def run_sync():
             if db_type == "MySQL":
-                _, duration = mysql_client.execute_query(query)
+                _, duration = db_clients["MySQL"].execute_query(query)
             elif db_type == "Postgres":
-                _, duration = postgres_client.execute_query(query)
+                _, duration = db_clients["Postgres"].execute_query(query)
             else:
                 duration = 0
             return duration
@@ -192,11 +196,11 @@ def main_page():
         if dropdown_bm.value and dropdown_db.value:
             ui.label(f"Server: {dropdown_db.value}")
             ui.label(f"Database: {dropdown_bm.value}")
-            ui.label(f"Size of database: {db_clients[dropdown_db.value].get_size_of_database(dropdown_bm.value)} MB")
+            ui.label(f"Size of database: {db_clients_local[dropdown_db.value].get_size_of_database(dropdown_bm.value)} MB")
 
     def on_change_dropdown_bm():
         current_db = dropdown_db.value
-        db_clients[current_db].set_database(dropdown_bm.value)
+        db_clients_local[current_db].set_database(dropdown_bm.value)
         database_info.refresh()
 
     def on_click_import_queries():
@@ -221,7 +225,7 @@ def main_page():
         Callback for when database server changes (postgres or mysql)
         """
         current_db = dropdown_db.value
-        new_bm_list = db_clients[current_db].get_databases()
+        new_bm_list = db_clients_local[current_db].get_databases()
         dropdown_bm.options = new_bm_list
         dropdown_bm.value = new_bm_list[0] if len(new_bm_list) > 0 else None
         dropdown_bm.update()
@@ -264,7 +268,7 @@ def main_page():
                                                     value=db_list[0],
                                                     on_change=on_change_dropdown_db)
                             current_db = dropdown_db.value
-                            bm_list = db_clients[current_db].get_databases()
+                            bm_list = db_clients_local[current_db].get_databases()
                             dropdown_bm = ui.select(options=bm_list, label="Database", value=bm_list[0] if len(bm_list) > 0 else None, on_change=on_change_dropdown_bm)
                             ui.button(text="Save Query", on_click=on_click_save_query)
                             database_info()
