@@ -11,7 +11,6 @@ class QueueWorker:
         while True:
             queries, query_template = await self.queue.get()
             try:
-                print("Executing callback: ", queries, query_template)
                 await self.callback(queries, query_template)
             except Exception as e:
                 print("Error:", e)
