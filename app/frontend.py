@@ -98,7 +98,7 @@ def main_page():
         def run_sync():
             result = None
             if db_type == "MySQL":
-                result = mysql_client.execute_query(query)
+                result = mysql_client.analyze_query(query)
             elif db_type == "Postgres":
                 _, duration = postgres_client.execute_query(query)
             else:
