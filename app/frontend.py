@@ -47,15 +47,18 @@ query_table_rows = []
 
 batch_results = []
 
+total_executed_batch = 0
+queries_in_queue = 0
+len_queries = 0
 
+@ui.page("/")
 def main_page():
-    total_executed_batch = 0
-    queries_in_queue = 0
+
 
     async def execute_query_batch(queries, query_template):
         global batch_results
-        nonlocal total_executed_batch
-        nonlocal queries_in_queue
+        global total_executed_batch
+        global queries_in_queue
         db_type = query_template['database']
         query_results = []
         print(f"Starting Query Batch {total_executed_batch}")
@@ -78,7 +81,8 @@ def main_page():
                     'val_3': var_data[2]['value'] if len(var_data) > 2 and 'value' in var_data[2] else '',
                 }
             )
-            print(f"Query N:[{i}/{len(queries)}] Done")
+            len_queries = len(queries)
+            print(f"Query N:[{i}/{len_queries}] Done")
             queue_information.refresh(i, len(queries), True)
             i = i + 1
         result_table.add_row(
@@ -157,7 +161,7 @@ def main_page():
             """
             Executes selected query iterating over parameter range values
             """
-            nonlocal queries_in_queue
+            global queries_in_queue
             range_values = []
             for handle in var_input_handles:
                 range_value_string = handle.value
