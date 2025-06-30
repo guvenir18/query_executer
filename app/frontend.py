@@ -190,13 +190,14 @@ def main_page():
 
     @ui.refreshable
     def database_info():
-        if dropdown_bm.value and dropdown_db.value:
+        if dropdown_bm.value and dropdown_db.value and False:
             ui.label(f"Server: {dropdown_db.value}")
             ui.label(f"Database: {dropdown_bm.value}")
             ui.label(f"Size of database: {db_clients[dropdown_db.value].get_size_of_database(dropdown_bm.value)} MB")
 
     def on_change_dropdown_bm():
         current_db = dropdown_db.value
+        return
         db_clients[current_db].set_database(dropdown_bm.value)
         database_info.refresh()
 
@@ -222,6 +223,7 @@ def main_page():
         Callback for when database server changes (postgres or mysql)
         """
         current_db = dropdown_db.value
+        return
         new_bm_list = db_clients[current_db].get_databases()
         dropdown_bm.options = new_bm_list
         dropdown_bm.value = new_bm_list[0] if len(new_bm_list) > 0 else None
