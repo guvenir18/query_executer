@@ -63,13 +63,13 @@ def main_page():
         for q in queries:
 
             var_data = q.variables
-            time = await execute_query(q.query, db_type)
+            result = await execute_query(q.query, db_type)
             query_results.append(
                 {
                     'server': db_type,
                     'database': query_template['benchmark'],
                     'query': query_template['name'],
-                    'runtime': time,
+                    'result': result,
                     'var_1': var_data[0]['name'] if len(var_data) > 0 and 'name' in var_data[0] else '',
                     'val_1': var_data[0]['value'] if len(var_data) > 0 and 'value' in var_data[0] else '',
                     'var_2': var_data[1]['name'] if len(var_data) > 1 and 'name' in var_data[1] else '',
@@ -96,13 +96,14 @@ def main_page():
 
     async def execute_query(query, db_type):
         def run_sync():
+            result = None
             if db_type == "MySQL":
-                _, duration = mysql_client.execute_query(query)
+                result = mysql_client.execute_query(query)
             elif db_type == "Postgres":
                 _, duration = postgres_client.execute_query(query)
             else:
-                duration = 0
-            return duration
+                result = None
+            return result
 
         return await asyncio.to_thread(run_sync)
 
