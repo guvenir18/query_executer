@@ -47,7 +47,7 @@ query_table_rows = []
 
 batch_results = []
 
-@ui.page("/")
+
 def main_page():
     total_executed_batch = 0
     queries_in_queue = 0
