@@ -236,7 +236,12 @@ def main_page():
         server = row["server"]
         db = row["database"]
         q = row["query"]
-        ui.download.content(json.dumps(batch_results[id]), f"{server}_{db}_{q}_{id}.json")
+        result =  batch_results[id][0]
+        result["result"] = str(result["result"])
+        print(result)
+        json_file = json.dumps(result)
+
+        ui.download.content(json_file, f"{server}_{db}_{q}_{id}.json")
 
     @ui.refreshable
     def queue_information(i=0, total=0, executing=False):
