@@ -272,7 +272,7 @@ def main_page():
                                                     value=db_list[0],
                                                     on_change=on_change_dropdown_db)
                             current_db = dropdown_db.value
-                            bm_list = db_clients[current_db].get_databases()
+                            bm_list = []
                             dropdown_bm = ui.select(options=bm_list, label="Database", value=bm_list[0] if len(bm_list) > 0 else None, on_change=on_change_dropdown_bm)
                             ui.button(text="Save Query", on_click=on_click_save_query)
                             database_info()
