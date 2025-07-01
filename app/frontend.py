@@ -4,6 +4,7 @@ import json
 from fastapi import FastAPI
 from nicegui import ui, events
 
+from app.analyze_parsers import parse_analyze_mysql
 from app.async_queue import QueueWorker
 from app.config import load_config
 from app.helpers import extract_variables, build_all_queries
@@ -65,21 +66,28 @@ def main_page():
         print(f"Starting Query Batch {total_executed_batch}")
         i = 0
         for q in queries:
-
             var_data = q.variables
-            time = await execute_query(q.query, db_type)
+            result = await execute_query(q.query, db_type)
+            var_list = [var['name'] for var in var_data]
+            parsed_result = parse_analyze_mysql(result, var_list)
+            # TODO: There must be a better way to do these checks
             query_results.append(
                 {
                     'server': db_type,
                     'database': query_template['benchmark'],
                     'query': query_template['name'],
-                    'runtime': time,
-                    'var_1': var_data[0]['name'] if len(var_data) > 0 and 'name' in var_data[0] else '',
+                    'filter_1': var_data[0]['name'] if len(var_data) > 0 and 'name' in var_data[0] else '',
                     'val_1': var_data[0]['value'] if len(var_data) > 0 and 'value' in var_data[0] else '',
-                    'var_2': var_data[1]['name'] if len(var_data) > 1 and 'name' in var_data[1] else '',
+                    'rows_1': parsed_result[0]['total_rows'] if len(var_data) > 0 and parsed_result[0]['variable'] == var_data[0]['name'] else '',
+                    'runtime_1': parsed_result[0]['runtime_ms'] if len(var_data) > 0 and parsed_result[0]['variable'] == var_data[0]['name'] else '',
+                    'filter_2': var_data[1]['name'] if len(var_data) > 1 and 'name' in var_data[1] else '',
                     'val_2': var_data[1]['value'] if len(var_data) > 1 and 'value' in var_data[1] else '',
-                    'var_3': var_data[2]['name'] if len(var_data) > 2 and 'name' in var_data[2] else '',
+                    'rows_2': parsed_result[1]['total_rows'] if len(var_data) > 1 and parsed_result[1]['variable'] == var_data[1]['name'] else '',
+                    'runtime_2': parsed_result[1]['runtime_ms'] if len(var_data) > 1 and parsed_result[1]['variable'] == var_data[1]['name'] else '',
+                    'filter_3': var_data[2]['name'] if len(var_data) > 2 and 'name' in var_data[2] else '',
                     'val_3': var_data[2]['value'] if len(var_data) > 2 and 'value' in var_data[2] else '',
+                    'rows_3': parsed_result[2]['total_rows'] if len(var_data) > 2 and parsed_result[2]['variable'] == var_data[2]['name'] else '',
+                    'runtime_3': parsed_result[2]['runtime_ms'] if len(var_data) > 2 and parsed_result[2]['variable'] == var_data[2]['name'] else '',
                 }
             )
             print(f"Query N:[{i}/{len(queries)}] Done")
@@ -101,12 +109,12 @@ def main_page():
     async def execute_query(query, db_type):
         def run_sync():
             if db_type == "MySQL":
-                _, duration = db_clients["MySQL"].execute_query(query)
+                result = db_clients["MySQL"].analyze_query(query)
             elif db_type == "Postgres":
-                _, duration = db_clients["Postgres"].execute_query(query)
+                result = db_clients["Postgres"].analyze_query(query)
             else:
-                duration = 0
-            return duration
+                result = None
+            return result[0]
 
         return await asyncio.to_thread(run_sync)
 
