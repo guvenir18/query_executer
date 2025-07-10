@@ -9,3 +9,4 @@ build/
 .pytest_cache
 app/config/local/
 .nicegui
+test/

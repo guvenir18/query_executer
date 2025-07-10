@@ -9,6 +9,7 @@ nicegui = "*"
 fastapi = "*"
 omegaconf = "*"
 psycopg = {extras = ["binary", "pool"], version = "*"}
+aiomysql = "*"
 
 [dev-packages]
 

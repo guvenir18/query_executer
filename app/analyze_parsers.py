@@ -28,12 +28,10 @@ def parse_analyze_mysql(plan_text: str, filter_vars: list):
 
 def extract_total_runtime(plan_text: str) -> float:
     """
-    Extracts total runtime (in milliseconds) from the top-level node
-    in MySQL EXPLAIN ANALYZE output.
+    Extracts the total runtime (in milliseconds) from the top-level node
+    in MySQL EXPLAIN ANALYZE output by taking the right-hand value
     """
-    match = re.search(r"actual time=(\d+\.?\d*)\.\.(\d+\.?\d*)", plan_text)
+    match = re.search(r"actual time=\d+\.?\d*\.\.(\d+\.?\d*)", plan_text)
     if match:
-        start_time = float(match.group(1))
-        end_time = float(match.group(2))
-        return end_time - start_time
+        return float(match.group(1))
     return 0.0
