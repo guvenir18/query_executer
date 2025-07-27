@@ -39,7 +39,7 @@ def build_single_query(template: str, variables: list) -> str:
     return re.sub(pattern, replace_placeholder, template)
 
 
-def build_all_queries(template: str, variable_ranges: list) -> list:
+def build_all_queries(template: str, variable_ranges: list) -> list[ReadyQuery]:
     variable_names = [var['name'] for var in variable_ranges]
     variable_types = {var['name']: var['type'] for var in variable_ranges}
 
@@ -50,7 +50,7 @@ def build_all_queries(template: str, variable_ranges: list) -> list:
     # Cartesian product of all variable values
     combinations = itertools.product(*value_lists)
 
-    all_queries = []
+    all_queries: List[ReadyQuery] = []
     for combo in combinations:
         # Prepare variable dicts with name, type, value
         variable_values = [

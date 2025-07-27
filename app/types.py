@@ -49,3 +49,8 @@ class BenchmarkQuery:
         }
 
 
+@dataclass
+class QueueState:
+    queries_in_queue: int
+    total_executed_batch: int
+

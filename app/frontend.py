@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 from fastapi import FastAPI
@@ -7,27 +6,14 @@ from nicegui import ui, events
 from app.analyze_parsers import parse_analyze_mysql, extract_total_runtime
 from app.async_queue import QueueWorker
 from app.config import load_config
+from app.backend_service import BackendService, start_db_connections
 from app.helpers import extract_variables, build_all_queries
-from app.postgres_client.postgres_client import PostgresClient
 from app.types import BenchmarkQuery
-from mysql_client.mysql_client import MysqlClient
 
 config = load_config()
 
-def start_db_connections():
-    clients = {}
+backend_service = BackendService()
 
-    if config.database.mysql.enabled:
-        mysql_client = MysqlClient()
-        clients["MySQL"] = mysql_client
-
-    if config.database.postgres.enabled:
-        postgres_client = PostgresClient()
-        clients["Postgres"] = postgres_client
-
-    return clients
-
-db_clients = start_db_connections()
 
 result_table_columns = [
     {'name': 'id', 'label': 'Id', 'field': 'id', 'required': True},
@@ -50,74 +36,26 @@ query_table_columns = [
 query_table_rows = []
 
 batch_results = []
+total_executed_batch = 0
 
 @ui.page("/")
-def main_page():
-    total_executed_batch = 0
+async def main_page():
+    await backend_service.initialize_queue_worker()
     queries_in_queue = 0
     db_clients_local = start_db_connections()
 
-    async def execute_query_batch(queries, query_template):
-        global batch_results
-        nonlocal total_executed_batch
-        nonlocal queries_in_queue
-        db_type = query_template['database']
-        query_results = []
-        print(f"Starting Query Batch {total_executed_batch}")
-        i = 0
-        for q in queries:
-            var_data = q.variables
-            result = await execute_query(q.query, db_type)
-            var_list = [var['name'] for var in var_data]
-            parsed_result = parse_analyze_mysql(result, var_list)
-            total_runtime = extract_total_runtime(result)
-            # TODO: There must be a better way to do these checks
-            query_results.append(
-                {
-                    'server': db_type,
-                    'database': query_template['benchmark'],
-                    'query': query_template['name'],
-                    'runtime': total_runtime,
-                    'filter_1': var_data[0]['name'] if len(var_data) > 0 and 'name' in var_data[0] else '',
-                    'val_1': var_data[0]['value'] if len(var_data) > 0 and 'value' in var_data[0] else '',
-                    'rows_1': parsed_result[0]['total_rows'] if len(var_data) > 0 and parsed_result[0]['variable'] == var_data[0]['name'] else '',
-                    'filter_2': var_data[1]['name'] if len(var_data) > 1 and 'name' in var_data[1] else '',
-                    'val_2': var_data[1]['value'] if len(var_data) > 1 and 'value' in var_data[1] else '',
-                    'rows_2': parsed_result[1]['total_rows'] if len(var_data) > 1 and parsed_result[1]['variable'] == var_data[1]['name'] else '',
-                    'filter_3': var_data[2]['name'] if len(var_data) > 2 and 'name' in var_data[2] else '',
-                    'val_3': var_data[2]['value'] if len(var_data) > 2 and 'value' in var_data[2] else '',
-                    'rows_3': parsed_result[2]['total_rows'] if len(var_data) > 2 and parsed_result[2]['variable'] == var_data[2]['name'] else '',
-                }
-            )
-            print(f"Query N:[{i}/{len(queries)}] Done")
-            queue_information.refresh(i, len(queries), True)
-            i = i + 1
+    def result_table_update(benchmark_query: BenchmarkQuery):
+        global total_executed_batch
         result_table.add_row(
             {
                 'id': total_executed_batch,
-                'server': db_type,
-                'database': query_template['benchmark'],
-                'query': query_template['name'],
+                'server': benchmark_query.database,
+                'database': benchmark_query.benchmark,
+                'query': benchmark_query.name,
             }
         )
-        batch_results.append(query_results)
         total_executed_batch += 1
-        queries_in_queue -= 1
         queue_information.refresh(0, 0, False)
-
-    async def execute_query(query, db_type):
-        def run_sync():
-            if db_type == "MySQL":
-                result = db_clients["MySQL"].analyze_query(query)
-            elif db_type == "Postgres":
-                result = db_clients["Postgres"].analyze_query(query)
-            else:
-                result = None
-            return result[0]
-
-        return await asyncio.to_thread(run_sync)
-
-    query_worker = QueueWorker(execute_query_batch)
 
     def on_click_save_query():
         """
@@ -134,14 +72,7 @@ def main_page():
             name=name_input.value
         )
         benchmark_query_list.append(benchmark_query)
-        new_query = {
-            'name': benchmark_query.name,
-            'database': benchmark_query.database,
-            'benchmark': benchmark_query.benchmark,
-            'query': benchmark_query.query,
-            'parameters': benchmark_query.parameters
-        }
-        add_query_to_table(new_query)
+        add_query_to_table(benchmark_query.to_dict())
 
     def add_query_to_table(new_query):
         """
@@ -163,7 +94,7 @@ def main_page():
 
     @ui.refreshable
     def variable_parameters():
-        def on_click_start_query_execution():
+        async def on_click_start_query_execution():
             """
             Executes selected query iterating over parameter range values
             """
@@ -174,10 +105,8 @@ def main_page():
                 range_value = tuple(int(x.strip()) for x in range_value_string.split(","))
                 range_values.append({'name': handle.label, 'range': range_value, 'type': 'INT'})
             query_template = query_table.selected[0]
-            query = query_template['query']
-            db_type = query_template['database']
-            queries = build_all_queries(query, range_values)
-            query_worker.schedule_callback(queries, query_template)
+            benchmark_query = BenchmarkQuery.from_dict(query_template)
+            await backend_service.schedule_query_exectution(benchmark_query, range_values)
             print("Query added to queue")
             queries_in_queue += 1
             queue_information.refresh(0, 0, False)
@@ -246,7 +175,10 @@ def main_page():
         server = row["server"]
         db = row["database"]
         q = row["query"]
-        ui.download.content(json.dumps(batch_results[id]), f"{server}_{db}_{q}_{id}.json")
+        ui.download.content(json.dumps(backend_service.result_storage.parsed_result_list[id]),
+                            f"{server}_{db}_{q}_{id}.json")
+        ui.download.content(json.dumps(backend_service.result_storage.raw_result_list[id]),
+                            f"{server}_{db}_{q}_{id}_raw.json")
 
     @ui.refreshable
     def queue_information(i=0, total=0, executing=False):
@@ -257,6 +189,7 @@ def main_page():
         else:
             ui.label("No queries are executing currently")
 
+    backend_service.set_table_update_callback(result_table_update)
     # UI code starts here
     with ui.row():
         with ui.column():
@@ -269,7 +202,7 @@ def main_page():
                     with ui.row():
                         with ui.column():
                             name_input = ui.input(label="Query Name")
-                            db_list = list(db_clients.keys())
+                            db_list = list(db_clients_local.keys())
                             ui.label("Server")
                             dropdown_db = ui.select(options=db_list, label="Server",
                                                     value=db_list[0],
