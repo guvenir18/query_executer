@@ -10,6 +10,7 @@ fastapi = "*"
 omegaconf = "*"
 psycopg = {extras = ["binary", "pool"], version = "*"}
 aiomysql = "*"
+duckdb = "*"
 
 [dev-packages]
 

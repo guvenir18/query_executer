@@ -16,3 +16,4 @@ database:
   # Not supported yet
   duckdb:
     enabled: false
+    path: "path/to/duckdb"
