@@ -10,3 +10,4 @@ build/
 app/config/local/
 .nicegui
 test/
+duckdb_data

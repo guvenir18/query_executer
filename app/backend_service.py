@@ -4,6 +4,7 @@ from typing import Dict, List, Callable
 
 from app.analyze_parsers import parse_analyze_mysql, extract_total_runtime
 from app.config import load_config
+from app.duckdb_client.duckdb_client import DuckDbClient
 from app.helpers import build_all_queries
 from app.mysql_client.async_mysql_client import AsyncMysqlClient
 from app.mysql_client.create_pool import create_mysql_pool
@@ -37,23 +38,26 @@ class DatabaseQueueWorker:
     """
 
     def __init__(self, callback: Callable, num_workers: int = 4):
-        self.callback = callback  # async def callback(queries, benchmark_query, mysql_client)
+        self.callback = callback
 
         self.mysql_queue = Queue()
         self.postgres_queue = Queue()
+        self.duckdb_queue = Queue()
 
         self.mysql_pool = None
         self.postgres_pool = None
 
         self.num_workers = num_workers
         self.postgres_in_progress = False
+        self.duckdb_in_progress = False
 
         self.semaphore = asyncio.Semaphore(self.num_workers)
+
+        asyncio.create_task(self.dispatch_loop())
 
     async def init(self):
         """
         Initializes the async connection pools.
-        Call this after creating an instance.
         """
         self.mysql_pool = await create_mysql_pool()
         self.postgres_pool = create_postgres_pool()
@@ -63,12 +67,17 @@ class DatabaseQueueWorker:
         while True:
             if not self.mysql_queue.empty():
                 queries, benchmark_query = await self.mysql_queue.get()
-                asyncio.create_task(self.run_mysql_task(queries, benchmark_query))
+                await asyncio.create_task(self.run_mysql_task(queries, benchmark_query))
 
             if not self.postgres_queue.empty() and not self.postgres_in_progress:
                 self.postgres_in_progress = True
                 queries, benchmark_query = await self.postgres_queue.get()
-                asyncio.create_task(self.run_postgres_task(queries, benchmark_query))
+                await asyncio.create_task(self.run_postgres_task(queries, benchmark_query))
+
+            if not self.duckdb_queue.empty() and not self.duckdb_in_progress:
+                self.duckdb_in_progress = True
+                queries, benchmark_query = await self.duckdb_queue.get()
+                await asyncio.create_task(self.run_duckdb_task(queries, benchmark_query))
 
             await asyncio.sleep(0.05)  # Avoid busy loop
 
@@ -90,6 +99,14 @@ class DatabaseQueueWorker:
         finally:
             self.postgres_in_progress = False
 
+    async def run_duckdb_task(self, queries, benchmark_query):
+        try:
+            client = DuckDbClient()
+            await self.callback(queries, benchmark_query, client)
+        except Exception as e:
+            print("[DuckDb] Error:", e)
+        finally:
+            self.duckdb_in_progress = False
 
     def schedule_callback(self, queries, benchmark_query):
         db_type = benchmark_query.query_type
@@ -158,8 +175,6 @@ class BackendService:
             # Maybe there is a better way to make a call for table update ?
             self.callback_table_update(benchmark_query)
 
-
-
     async def schedule_query_exectution(self, benchmark_query: BenchmarkQuery, range_values):
         queries = build_all_queries(benchmark_query.query, range_values)
         self.queue_worker.schedule_callback(queries, benchmark_query)
@@ -176,8 +191,16 @@ class BackendService:
         db_type = benchmark_query.database
         benchmark = benchmark_query.benchmark
         name = benchmark_query.name
+        # TODO: Handle different output parsers (Postgres, Duckdb) depending on benchmark_query.database
+        # TODO: Implement analyze output parsers for Postgres and DuckDB
+        # if benchmark_query.database == "MySQL":
+        #   parsed_result = parse_analyze_mysql( ... )
+        # elif benchmark_query.database == "Postgres":
+        #   parsed_result = parse_analyze_postgres ( ... )
+        # ...
         parsed_result = parse_analyze_mysql(result, var_list)
         print(parsed_result)
+        # TODO: This also needs to be different for each database
         total_runtime = extract_total_runtime(result)
         formatted_result = {
             'server': db_type,
