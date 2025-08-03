@@ -37,7 +37,7 @@ class DatabaseQueueWorker:
     each using its own MysqlClient instance from a shared aiomysql pool.
     """
 
-    def __init__(self, callback: Callable, num_workers: int = 4):
+    def __init__(self, callback: Callable, num_workers: int = 5):
         self.callback = callback
 
         self.mysql_queue = Queue()
@@ -67,49 +67,52 @@ class DatabaseQueueWorker:
         while True:
             if not self.mysql_queue.empty():
                 queries, benchmark_query = await self.mysql_queue.get()
-                await asyncio.create_task(self.run_mysql_task(queries, benchmark_query))
+                _ = asyncio.create_task(self.run_mysql_task(queries, benchmark_query))
 
             if not self.postgres_queue.empty() and not self.postgres_in_progress:
                 self.postgres_in_progress = True
                 queries, benchmark_query = await self.postgres_queue.get()
-                await asyncio.create_task(self.run_postgres_task(queries, benchmark_query))
+                _ = asyncio.create_task(self.run_postgres_task(queries, benchmark_query))
 
             if not self.duckdb_queue.empty() and not self.duckdb_in_progress:
                 self.duckdb_in_progress = True
                 queries, benchmark_query = await self.duckdb_queue.get()
-                await asyncio.create_task(self.run_duckdb_task(queries, benchmark_query))
+                _ = asyncio.create_task(self.run_duckdb_task(queries, benchmark_query))
 
             await asyncio.sleep(0.05)  # Avoid busy loop
 
     async def run_mysql_task(self, queries, benchmark_query):
-        try:
-            async with self.mysql_pool.acquire() as conn:
-                client = await AsyncMysqlClient.create(conn)
-                await self.callback(queries, benchmark_query, client)
-        except Exception as e:
-            print("[MySQL] Error:", e)
+        async with self.semaphore:
+            try:
+                async with self.mysql_pool.acquire() as conn:
+                    client = await AsyncMysqlClient.create(conn)
+                    await self.callback(queries, benchmark_query, client)
+            except Exception as e:
+                print("[MySQL] Error:", e)
 
     async def run_postgres_task(self, queries, benchmark_query):
-        try:
-            async with self.postgres_pool.acquire() as conn:
-                client = AsyncPostgresClient(conn)
-                await self.callback(queries, benchmark_query, client)
-        except Exception as e:
-            print("[Postgres] Error:", e)
-        finally:
-            self.postgres_in_progress = False
+        async with self.semaphore:
+            try:
+                async with self.postgres_pool.acquire() as conn:
+                    client = AsyncPostgresClient(conn)
+                    await self.callback(queries, benchmark_query, client)
+            except Exception as e:
+                print("[Postgres] Error:", e)
+            finally:
+                self.postgres_in_progress = False
 
     async def run_duckdb_task(self, queries, benchmark_query):
-        try:
-            client = DuckDbClient()
-            await self.callback(queries, benchmark_query, client)
-        except Exception as e:
-            print("[DuckDb] Error:", e)
-        finally:
-            self.duckdb_in_progress = False
+        async with self.semaphore:
+            try:
+                client = DuckDbClient()
+                await self.callback(queries, benchmark_query, client)
+            except Exception as e:
+                print("[DuckDb] Error:", e)
+            finally:
+                self.duckdb_in_progress = False
 
-    def schedule_callback(self, queries, benchmark_query):
-        db_type = benchmark_query.query_type
+    def schedule_callback(self, queries, benchmark_query: BenchmarkQuery):
+        db_type = benchmark_query.database
         if db_type == "MySQL":
             self.mysql_queue.put_nowait((queries, benchmark_query))
         elif db_type == "Postgres":
@@ -159,14 +162,16 @@ class BackendService:
         db_type = benchmark_query.database
         result_list = []
         parsed_result_list = []
+        i = 1
         for ready_query in queries:
             query = ready_query.query
             result = await client.analyze_query(query)
-            print(result)
             result = result["EXPLAIN"]
             formatted_result = await self._process_result(result, ready_query, benchmark_query)
             result_list.append(result)
             parsed_result_list.append(formatted_result)
+            print(f"{db_type} Query Completed {i}/{len(queries)}")
+            i += 1
         # For multithreaded solution
         async with self.result_storage.lock:
             print("Acquire lock")
@@ -186,8 +191,6 @@ class BackendService:
         """
         var_data = ready_query.variables
         var_list = [var['name'] for var in var_data]
-        print(var_data)
-        print(var_list)
         db_type = benchmark_query.database
         benchmark = benchmark_query.benchmark
         name = benchmark_query.name
@@ -199,7 +202,6 @@ class BackendService:
         #   parsed_result = parse_analyze_postgres ( ... )
         # ...
         parsed_result = parse_analyze_mysql(result, var_list)
-        print(parsed_result)
         # TODO: This also needs to be different for each database
         total_runtime = extract_total_runtime(result)
         formatted_result = {
