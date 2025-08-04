@@ -7,8 +7,8 @@ import glob
 # Configuration
 # -----------------------------
 # Configure these values depending on your requirements
-TPCH_DB_FILE = "duckdb_data/tpch_1.duckdb"  # duckdb file will be created
-TPCH_DATA_DIR = "../tpch/tpch_1"            # directory where .tbl files are located
+TPCH_DB_FILE = "../duckdb_data/tpch_1.duckdb"  # duckdb file will be created
+TPCH_DATA_DIR = "../../tpch/tpch_1"  # directory where .tbl files are located
 
 # Allow overriding the data path via CLI
 if len(sys.argv) > 1:

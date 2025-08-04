@@ -164,14 +164,19 @@ class BackendService:
         parsed_result_list = []
         i = 1
         for ready_query in queries:
-            query = ready_query.query
-            result = await client.analyze_query(query)
-            result = result["EXPLAIN"]
-            formatted_result = await self._process_result(result, ready_query, benchmark_query)
-            result_list.append(result)
-            parsed_result_list.append(formatted_result)
-            print(f"{db_type} Query Completed {i}/{len(queries)}")
-            i += 1
+            try:
+                query = ready_query.query
+                result = await client.analyze_query(query)
+                result = result["EXPLAIN"]
+                formatted_result = await self._process_result(result, ready_query, benchmark_query)
+                result_list.append(result)
+                parsed_result_list.append(formatted_result)
+                print(f"{db_type} Query Completed {i}/{len(queries)}")
+            except Exception as e:
+                print(f"Error: {db_type} Query {i}/{len(queries)}")
+                print("Error: ", e)
+            finally:
+                i += 1
         # For multithreaded solution
         async with self.result_storage.lock:
             print("Acquire lock")
