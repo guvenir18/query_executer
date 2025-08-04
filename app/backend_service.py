@@ -175,6 +175,7 @@ class BackendService:
             except Exception as e:
                 print(f"Error: {db_type} Query {i}/{len(queries)}")
                 print("Error: ", e)
+                print("Failed query: ", ready_query.query)
             finally:
                 i += 1
         # For multithreaded solution
@@ -194,34 +195,39 @@ class BackendService:
         """
         Process single query result, extract runtime and rows executed and format result
         """
-        var_data = ready_query.variables
-        var_list = [var['name'] for var in var_data]
-        db_type = benchmark_query.database
-        benchmark = benchmark_query.benchmark
-        name = benchmark_query.name
-        # TODO: Handle different output parsers (Postgres, Duckdb) depending on benchmark_query.database
-        # TODO: Implement analyze output parsers for Postgres and DuckDB
-        # if benchmark_query.database == "MySQL":
-        #   parsed_result = parse_analyze_mysql( ... )
-        # elif benchmark_query.database == "Postgres":
-        #   parsed_result = parse_analyze_postgres ( ... )
-        # ...
-        parsed_result = parse_analyze_mysql(result, var_list)
-        # TODO: This also needs to be different for each database
-        total_runtime = extract_total_runtime(result)
-        formatted_result = {
-            'server': db_type,
-            'database': benchmark,
-            'query': name,
-            'runtime': total_runtime,
-            'filter_1': var_data[0]['name'] if len(var_data) > 0 and 'name' in var_data[0] else '',
-            'val_1': var_data[0]['value'] if len(var_data) > 0 and 'value' in var_data[0] else '',
-            'rows_1': parsed_result[0]['total_rows'] if len(var_data) > 0 and parsed_result[0]['variable'] == var_data[0]['name'] else '',
-            'filter_2': var_data[1]['name'] if len(var_data) > 1 and 'name' in var_data[1] else '',
-            'val_2': var_data[1]['value'] if len(var_data) > 1 and 'value' in var_data[1] else '',
-            'rows_2': parsed_result[1]['total_rows'] if len(var_data) > 1 and parsed_result[1]['variable'] == var_data[1]['name'] else '',
-            'filter_3': var_data[2]['name'] if len(var_data) > 2 and 'name' in var_data[2] else '',
-            'val_3': var_data[2]['value'] if len(var_data) > 2 and 'value' in var_data[2] else '',
-            'rows_3': parsed_result[2]['total_rows'] if len(var_data) > 2 and parsed_result[2]['variable'] == var_data[2]['name'] else '',
-        }
-        return formatted_result
+        try:
+            var_data = ready_query.variables
+            var_list = [var['name'] for var in var_data]
+            db_type = benchmark_query.database
+            benchmark = benchmark_query.benchmark
+            name = benchmark_query.name
+            # TODO: Handle different output parsers (Postgres, Duckdb) depending on benchmark_query.database
+            # TODO: Implement analyze output parsers for Postgres and DuckDB
+            # if benchmark_query.database == "MySQL":
+            #   parsed_result = parse_analyze_mysql( ... )
+            # elif benchmark_query.database == "Postgres":
+            #   parsed_result = parse_analyze_postgres ( ... )
+            # ...
+            parsed_result = parse_analyze_mysql(result, var_list)
+            # TODO: This also needs to be different for each database
+            total_runtime = extract_total_runtime(result)
+            print(parsed_result)
+            print(total_runtime)
+            formatted_result = {
+                'server': db_type,
+                'database': benchmark,
+                'query': name,
+                'runtime': total_runtime,
+                'filter_1': var_data[0]['name'] if len(var_data) > 0 and 'name' in var_data[0] else '',
+                'val_1': var_data[0]['value'] if len(var_data) > 0 and 'value' in var_data[0] else '',
+                'rows_1': parsed_result[0]['total_rows'] if len(var_data) > 0 and parsed_result[0]['variable'] == var_data[0]['name'] else '',
+                'filter_2': var_data[1]['name'] if len(var_data) > 1 and 'name' in var_data[1] else '',
+                'val_2': var_data[1]['value'] if len(var_data) > 1 and 'value' in var_data[1] else '',
+                'rows_2': parsed_result[1]['total_rows'] if len(var_data) > 1 and parsed_result[1]['variable'] == var_data[1]['name'] else '',
+                'filter_3': var_data[2]['name'] if len(var_data) > 2 and 'name' in var_data[2] else '',
+                'val_3': var_data[2]['value'] if len(var_data) > 2 and 'value' in var_data[2] else '',
+                'rows_3': parsed_result[2]['total_rows'] if len(var_data) > 2 and parsed_result[2]['variable'] == var_data[2]['name'] else '',
+            }
+            return formatted_result
+        except Exception as e:
+            raise e
