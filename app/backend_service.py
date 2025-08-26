@@ -31,6 +31,18 @@ def start_db_connections():
     return clients
 
 
+def get_min_max_of_column(client: MysqlClient, column: str):
+    column_lower = column.lower()
+    tables = client.get_table_list()
+    for table in tables:
+        column_list = client.get_column_list_of_table(table)
+        normalized_columns = [col.lower() for col in column_list]
+        if column_lower in normalized_columns:
+            actual_column = column_list[normalized_columns.index(column_lower)]
+            return client.get_min_max_of_column(table, actual_column)
+    return 0, 0
+
+
 class DatabaseQueueWorker:
     """
     Worker to execute queries asynchronously with 4 parallel workers,

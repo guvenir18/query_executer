@@ -6,9 +6,11 @@ from nicegui import ui, events
 from app.analyze_parsers import parse_analyze_mysql, extract_total_runtime
 from app.async_queue import QueueWorker
 from app.config import load_config
-from app.backend_service import BackendService, start_db_connections
+from app.backend_service import BackendService, start_db_connections, get_min_max_of_column
 from app.helpers import extract_variables, build_all_queries
 from app.types import BenchmarkQuery
+from app.ui.analyze_page import analyze_page
+from app.ui.navbar import navbar
 
 config = load_config()
 
@@ -40,6 +42,7 @@ total_executed_batch = 0
 
 @ui.page("/")
 async def main_page():
+    navbar()
     await backend_service.initialize_queue_worker()
     queries_in_queue = 0
     db_clients_local = start_db_connections()
@@ -121,8 +124,10 @@ async def main_page():
                 for variable in variables:
                     with ui.column():
                         var_name = variable.get("name")
+                        min_value, max_value = get_min_max_of_column(db_clients_local["MySQL"], var_name)
                         ui.label(
                             f"Range values for Parameter: {var_name}, Type: {variable.get("data_type")}")
+                        ui.label(f"Min :{min_value}, Max: {max_value}")
                         var_input = ui.input(label=var_name)
                         var_input_handles.append(var_input)
                 ui.button("Start Query Execution", on_click=on_click_start_query_execution)
@@ -243,6 +248,12 @@ async def main_page():
                     result_table.on("action", on_row_download_result)
                 with ui.card():
                     queue_information()
+
+
+@ui.page("/analyze")
+async def analyze_page_route():
+    navbar()
+    analyze_page()
 
 
 def init(fastapi_app: FastAPI) -> None:

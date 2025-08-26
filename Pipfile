@@ -11,6 +11,9 @@ omegaconf = "*"
 psycopg = {extras = ["binary", "pool"], version = "*"}
 aiomysql = "*"
 duckdb = "*"
+numpy = "*"
+scikit-learn = "*"
+matplotlib = "*"
 
 [dev-packages]
 

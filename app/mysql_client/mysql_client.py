@@ -75,3 +75,33 @@ class MysqlClient:
         query = "SHOW DATABASES;"
         self.cursor.execute(query)
         return [row[0] for row in self.cursor.fetchall() if row[0] not in system_dbs]
+
+    def get_table_list(self):
+        """
+        Returns list of tables
+        """
+        self.cursor.execute("SHOW TABLES")
+        return [table_name for (table_name,) in self.cursor.fetchall()]
+
+    def get_column_list_of_table(self, table_name: str):
+        """
+        Returns list of column names for the given table
+        """
+        query = """
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = %s
+              AND TABLE_NAME = %s
+        """
+        self.cursor.execute(query, (config.database.mysql.db, table_name))
+        return [col_name for (col_name,) in self.cursor.fetchall()]
+
+    def get_min_max_of_column(self, table_name: str, column_name: str):
+        """
+        Returns the minimum and maximum values of a given column in a MySQL table.
+        """
+        query = f"SELECT MIN({column_name}), MAX({column_name}) FROM {table_name}"
+        self.cursor.execute(query)
+        min_val, max_val = self.cursor.fetchone()
+        return min_val, max_val
+
