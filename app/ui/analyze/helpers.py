@@ -1,16 +1,10 @@
-import json
 import re
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, Tuple, List
 
 import numpy as np
 import pandas as pd
-from nicegui import ui, events
-import json
 
-from app.sampling_methods import stratified_time_sampling
-from app.sampling_methods.adaptive_balanced_sampling import sample_adaptive_balanced, _coerce_numeric
-from app.sampling_methods.calculate_qerr import fit_polynomial_on_sample, predict_and_qerr_for_all, summarize_qerr
-from app.sampling_methods.stratified_time_sampling import sample_stratified
+from app.sampling_methods.adaptive_balanced_sampling import _coerce_numeric
 
 _DB_KEYS = {
     "postgres": ("postgres", "postgre", "pgsql", "psql"),
@@ -142,80 +136,9 @@ def load_runtime_from_json(
     return df
 
 
-def run_json(
-    records: List[dict],
-    filter_name: str,
-    ratio: float = 0.10,
-    target_n: Optional[int] = None,
-    seed: int = 42,
-    strata_K: int = 12,
-    batches: Optional[int] = None,
-    extra_cols: Optional[List[str]] = None,
-) -> List[Dict]:
-    """
-    JSON in -> JSON out. Samples **over the values of `filter_name`**.
-    """
-    df = load_runtime_from_json(records, filter_name=filter_name, extra_cols=extra_cols)
-    if df.empty:
-        return []  # nothing to sample
-    sel = sample_adaptive_balanced(
-        df,
-        target_ratio=ratio,
-        target_n=target_n,
-        seed=seed,
-        strata_K=strata_K,
-        batches=batches,
-    )
-    return sel
-
-
-
-import pandas as pd
-import numpy as np
-
-def plot_qerr(evaluation_df, filter_name: str):
-    x = evaluation_df[filter_name]
-    y = evaluation_df['qerr']
-
-    with ui.matplotlib(figsize=(6, 4)).figure as fig:
-        ax = fig.gca()
-        ax.scatter(x, y, alpha=0.7)
-        ax.set_xlabel(filter_name)
-        ax.set_ylabel('Q-error')
-        ax.set_title(f'Q-error vs {filter_name}')
-        ax.grid(True, linestyle='--', alpha=0.6)
-
-
-def analyze_page():
-    def on_upload_import_queries(e: events.UploadEventArguments):
-        """
-        Callback for "Import Queries" upload block
-        """
-        text = e.content.read().decode("utf-8")
-        data_list = json.loads(text)
-        runtime=load_runtime_from_json(data_list, "o_orderdate")
-        result = run_json(data_list, "o_orderdate")
-
-        FILTER = "o_orderdate"
-        ENGINE = "auto"
-        DEGREE = 2
-
-        model = fit_polynomial_on_sample(result, filter_name=FILTER, engine=ENGINE, degree=DEGREE)
-
-        evaluation = predict_and_qerr_for_all(runtime, model, filter_name=FILTER, engine=ENGINE)
-
-        stats = summarize_qerr(evaluation["qerr"])
-
-        print(evaluation.head())
-        print(stats)
-        plot_qerr(evaluation, filter_name="o_orderdate")
-        ui.notify("Upload done")
-
-        res = sample_stratified(runtime)
-        model_2 = fit_polynomial_on_sample(res, filter_name=FILTER, engine=ENGINE, degree=DEGREE)
-        evaluation_2 = predict_and_qerr_for_all(runtime, model_2, filter_name=FILTER, engine=ENGINE)
-        plot_qerr(evaluation_2, filter_name="o_orderdate")
-
-    ui.label("Upload JSON Data")
-    ui.label("Sample, Fit and Calculate Qerr")
-    ui.upload(on_upload=on_upload_import_queries).classes('w-[200px]')
+def extract_filters(entry, max_filters=3):
+    return [
+        entry[f"filter_{i}"]
+        for i in range(1, max_filters + 1)
+        if entry.get(f"filter_{i}")
+    ]

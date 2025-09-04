@@ -3,14 +3,12 @@ import json
 from fastapi import FastAPI
 from nicegui import ui, events
 
-from app.analyze_parsers import parse_analyze_mysql, extract_total_runtime
-from app.async_queue import QueueWorker
 from app.config import load_config
 from app.backend_service import BackendService, start_db_connections, get_min_max_of_column
-from app.helpers import extract_variables, build_all_queries
+from app.helpers import extract_variables
 from app.types import BenchmarkQuery
-from app.ui.analyze_page import analyze_page
-from app.ui.navbar import navbar
+from app.ui.analyze.analyze_page import analyze_page
+from app.ui.common.navbar import navbar
 
 config = load_config()
 
@@ -253,7 +251,7 @@ async def main_page():
 @ui.page("/analyze")
 async def analyze_page_route():
     navbar()
-    analyze_page()
+    analyze_page(result_table_rows)
 
 
 def init(fastapi_app: FastAPI) -> None:
