@@ -9,7 +9,7 @@ config = load_config()
 
 class DuckDbClient:
     def __init__(self):
-        self.conn = duckdb.connect(database=config.duckdb.path)
+        self.conn = duckdb.connect(database=config.database.duckdb.path)
         self.cursor = self.conn.cursor()
 
     async def execute_query(self, query: str) -> Tuple[Optional[List[tuple]], float]:
@@ -31,6 +31,9 @@ class DuckDbClient:
         Run EXPLAIN ANALYZE and return the query plan.
         """
         try:
+            self.cursor.execute("PRAGMA enable_profiling;")
+            self.cursor.execute("SET enable_profiling = 'json';")
+            self.cursor.execute("SET profiling_output = 'out.json';")
             return self.cursor.execute(f"EXPLAIN ANALYZE {query}").fetchall()
         except Exception as e:
             print("Query Analyze Failed:", e)

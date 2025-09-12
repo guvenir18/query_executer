@@ -18,7 +18,7 @@ config = load_config()
 
 
 def start_db_connections():
-    clients: Dict[str, MysqlClient | PostgresClient] = {}
+    clients: Dict[str, MysqlClient | PostgresClient | DuckDbClient] = {}
 
     if config.database.mysql.enabled:
         mysql_client = MysqlClient()
@@ -27,6 +27,10 @@ def start_db_connections():
     if config.database.postgres.enabled:
         postgres_client = PostgresClient()
         clients["Postgres"] = postgres_client
+
+    if config.database.duckdb.enabled:
+        duckdb_client = DuckDbClient()
+        clients["DuckDB"] = duckdb_client
 
     return clients
 
@@ -129,6 +133,10 @@ class DatabaseQueueWorker:
             self.mysql_queue.put_nowait((queries, benchmark_query))
         elif db_type == "Postgres":
             self.postgres_queue.put_nowait((queries, benchmark_query))
+        elif db_type == "DuckDB":
+            self.duckdb_queue.put_nowait((queries, benchmark_query))
+        else:
+            print("Unknown database type:", db_type)
 
 
 class ResultStorage:
@@ -179,15 +187,15 @@ class BackendService:
             try:
                 query = ready_query.query
                 result = await client.analyze_query(query)
-                result = result["EXPLAIN"]
-                formatted_result = await self._process_result(result, ready_query, benchmark_query)
+                print(result)
+                result = result[0]
+                #formatted_result = await self._process_result(result, ready_query, benchmark_query)
                 result_list.append(result)
-                parsed_result_list.append(formatted_result)
+                #parsed_result_list.append(formatted_result)
                 print(f"{db_type} Query Completed {i}/{len(queries)}")
             except Exception as e:
                 print(f"Error: {db_type} Query {i}/{len(queries)}")
                 print("Error: ", e)
-                print("Failed query: ", ready_query.query)
             finally:
                 i += 1
         # For multithreaded solution
@@ -223,8 +231,6 @@ class BackendService:
             parsed_result = parse_analyze_mysql(result, var_list)
             # TODO: This also needs to be different for each database
             total_runtime = extract_total_runtime(result)
-            print(parsed_result)
-            print(total_runtime)
             formatted_result = {
                 'server': db_type,
                 'database': benchmark,

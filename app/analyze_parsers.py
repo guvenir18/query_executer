@@ -1,4 +1,5 @@
 import re
+from typing import Dict, Any, List
 
 
 def parse_analyze_mysql(plan_text: str, filter_vars: list):
@@ -41,3 +42,40 @@ def extract_total_runtime(plan_text: str) -> float:
     if match:
         return float(match.group(1))
     return 0.0
+
+
+def extract_runtime_and_filter_scans_duckdb(profile: Dict[str, Any], filters: List[str]) -> Dict[str, Any]:
+    """
+    profile: parsed DuckDB JSON profile (the dict you posted)
+    filters: list of substrings to look for inside extra_info["Filters"], e.g. ["o_orderdate"]
+    Returns:
+        {
+          "total_runtime": <float>,         # from profile["latency"] if present, else 0.0
+          "filters": { "<filter>": <int>, ... }  # sum of operator_rows_scanned on nodes whose Filters contain the substring
+        }
+    """
+    # total runtime
+    total_runtime = float(profile.get("latency", 0.0))
+
+    # prepare accumulator
+    scans: Dict[str, int] = {f: 0 for f in filters}
+    # normalize filters for case-insensitive matching
+    norm_filters = [f.lower() for f in filters]
+
+    def walk(node: Dict[str, Any]):
+        # check Filters in extra_info
+        extra = node.get("extra_info") or {}
+        filt = extra.get("Filters")
+        if isinstance(filt, str):
+            filt_l = filt.lower()
+            for f_in, f_raw in zip(norm_filters, filters):
+                if f_in in filt_l:
+                    scans[f_raw] += int(node.get("operator_rows_scanned", 0))
+
+        # recurse
+        for child in node.get("children", []) or []:
+            walk(child)
+
+    walk(profile)
+    return {"total_runtime": total_runtime, "filters": scans}
+
