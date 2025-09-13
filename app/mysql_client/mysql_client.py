@@ -38,6 +38,7 @@ class MysqlClient:
         try:
             self.cursor.execute(f"EXPLAIN ANALYZE {query}")
             results = self.cursor.fetchone()
+            results = results["EXPLAIN"]
             return results
         except Exception as e:
             print("Query Analyze Failed: ", e)

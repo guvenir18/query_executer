@@ -2,7 +2,7 @@ import asyncio
 from asyncio import Queue
 from typing import Dict, List, Callable
 
-from app.analyze_parsers import parse_analyze_mysql, extract_total_runtime
+from app.analyze_parsers import parse_analyze_mysql, extract_total_runtime, extract_runtime_and_filter_scans_duckdb
 from app.config import load_config
 from app.duckdb_client.duckdb_client import DuckDbClient
 from app.helpers import build_all_queries
@@ -187,11 +187,9 @@ class BackendService:
             try:
                 query = ready_query.query
                 result = await client.analyze_query(query)
-                print(result)
-                result = result[0]
-                #formatted_result = await self._process_result(result, ready_query, benchmark_query)
+                formatted_result = await self._process_result(result, ready_query, benchmark_query)
                 result_list.append(result)
-                #parsed_result_list.append(formatted_result)
+                parsed_result_list.append(formatted_result)
                 print(f"{db_type} Query Completed {i}/{len(queries)}")
             except Exception as e:
                 print(f"Error: {db_type} Query {i}/{len(queries)}")
@@ -221,16 +219,19 @@ class BackendService:
             db_type = benchmark_query.database
             benchmark = benchmark_query.benchmark
             name = benchmark_query.name
-            # TODO: Handle different output parsers (Postgres, Duckdb) depending on benchmark_query.database
-            # TODO: Implement analyze output parsers for Postgres and DuckDB
-            # if benchmark_query.database == "MySQL":
-            #   parsed_result = parse_analyze_mysql( ... )
-            # elif benchmark_query.database == "Postgres":
-            #   parsed_result = parse_analyze_postgres ( ... )
-            # ...
-            parsed_result = parse_analyze_mysql(result, var_list)
-            # TODO: This also needs to be different for each database
-            total_runtime = extract_total_runtime(result)
+            if benchmark_query.database == "MySQL":
+                parsed_result = parse_analyze_mysql(result, var_list)
+                total_runtime = extract_total_runtime(result)
+            elif benchmark_query.database == "Postgres":
+                print("No postgres support")
+                pass
+            elif benchmark_query.database == "DuckDB":
+                duck_parsed = extract_runtime_and_filter_scans_duckdb(result, var_list)
+                total_runtime = duck_parsed["total_runtime"]
+                parsed_result = duck_parsed["filters"]
+            else:
+                total_runtime = 0
+
             formatted_result = {
                 'server': db_type,
                 'database': benchmark,

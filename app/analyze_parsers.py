@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Dict, Any, List
 
@@ -44,22 +45,30 @@ def extract_total_runtime(plan_text: str) -> float:
     return 0.0
 
 
-def extract_runtime_and_filter_scans_duckdb(profile: Dict[str, Any], filters: List[str]) -> Dict[str, Any]:
+def extract_runtime_and_filter_scans_duckdb(profile_json: str, filters: List[str]) -> Dict[str, Any]:
     """
-    profile: parsed DuckDB JSON profile (the dict you posted)
+    profile_json: JSON string of the DuckDB profile (what EXPLAIN ANALYZE JSON emits)
     filters: list of substrings to look for inside extra_info["Filters"], e.g. ["o_orderdate"]
+
     Returns:
         {
-          "total_runtime": <float>,         # from profile["latency"] if present, else 0.0
-          "filters": { "<filter>": <int>, ... }  # sum of operator_rows_scanned on nodes whose Filters contain the substring
+          "total_runtime": <float>,   # from profile["latency"] if present, else 0.0
+          "filters": [
+            {"variable": "<filter>", "total_rows": <int>}, ...
+          ]
         }
     """
+    # Parse JSON string → Python dict (jsonb-like structure)
+    try:
+        profile: Dict[str, Any] = json.loads(profile_json)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid profile JSON: {e}") from e
+
     # total runtime
     total_runtime = float(profile.get("latency", 0.0))
 
     # prepare accumulator
     scans: Dict[str, int] = {f: 0 for f in filters}
-    # normalize filters for case-insensitive matching
     norm_filters = [f.lower() for f in filters]
 
     def walk(node: Dict[str, Any]):
@@ -73,9 +82,13 @@ def extract_runtime_and_filter_scans_duckdb(profile: Dict[str, Any], filters: Li
                     scans[f_raw] += int(node.get("operator_rows_scanned", 0))
 
         # recurse
-        for child in node.get("children", []) or []:
+        for child in (node.get("children") or []):
             walk(child)
 
     walk(profile)
-    return {"total_runtime": total_runtime, "filters": scans}
+
+    # dict → list of objects
+    filters_list = [{"variable": k, "total_rows": v} for k, v in scans.items()]
+
+    return {"total_runtime": total_runtime, "filters": filters_list}
 

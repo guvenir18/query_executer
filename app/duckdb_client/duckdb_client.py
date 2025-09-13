@@ -1,3 +1,5 @@
+import json
+
 import duckdb
 import os
 from typing import Optional, Tuple, List
@@ -26,18 +28,29 @@ class DuckDbClient:
             print("Query Failed:", e)
             return None, 0
 
-    async def analyze_query(self, query: str) -> Optional[List[tuple]]:
+    async def analyze_query(self, query: str):
         """
-        Run EXPLAIN ANALYZE and return the query plan.
+        Run query with profiling enabled and return the JSON profile
+        Currently I couldn't find any other way
         """
         try:
-            self.cursor.execute("PRAGMA enable_profiling;")
             self.cursor.execute("SET enable_profiling = 'json';")
             self.cursor.execute("SET profiling_output = 'out.json';")
-            return self.cursor.execute(f"EXPLAIN ANALYZE {query}").fetchall()
+
+            self.cursor.execute(query).fetchall()
+
+            with open("out.json", "r", encoding="utf-8") as f:
+                return f.read()
+
         except Exception as e:
             print("Query Analyze Failed:", e)
             return None
+        finally:
+            # turn off profiling for safety
+            try:
+                self.cursor.execute("PRAGMA disable_profiling;")
+            except Exception:
+                pass
 
     async def set_database(self, db_path: str):
         """
