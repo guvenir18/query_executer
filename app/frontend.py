@@ -130,18 +130,6 @@ async def main_page():
                         var_input_handles.append(var_input)
                 ui.button("Start Query Execution", on_click=on_click_start_query_execution)
 
-    @ui.refreshable
-    def database_info():
-        if dropdown_bm.value and dropdown_db.value:
-            ui.label(f"Server: {dropdown_db.value}")
-            ui.label(f"Database: {dropdown_bm.value}")
-            ui.label(f"Size of database: {db_clients_local[dropdown_db.value].get_size_of_database(dropdown_bm.value)} MB")
-
-    def on_change_dropdown_bm():
-        current_db = dropdown_db.value
-        db_clients_local[current_db].set_database(dropdown_bm.value)
-        database_info.refresh()
-
     def on_click_import_queries():
         """
         Callback for "Import Queries" button
@@ -158,16 +146,6 @@ async def main_page():
             benchmark_query_list.append(BenchmarkQuery.from_dict(data))
             add_query_to_table(data)
         ui.notify("Upload done")
-
-    def on_change_dropdown_db():
-        """
-        Callback for when database server changes (postgres or mysql)
-        """
-        current_db = dropdown_db.value
-        new_bm_list = db_clients_local[current_db].get_databases()
-        dropdown_bm.options = new_bm_list
-        dropdown_bm.value = new_bm_list[0] if len(new_bm_list) > 0 else None
-        dropdown_bm.update()
 
     def on_row_download_result(msg):
         """
@@ -208,13 +186,10 @@ async def main_page():
                             db_list = list(db_clients_local.keys())
                             ui.label("Server")
                             dropdown_db = ui.select(options=db_list, label="Server",
-                                                    value=db_list[0],
-                                                    on_change=on_change_dropdown_db)
-                            current_db = dropdown_db.value
-                            bm_list = db_clients_local[current_db].get_databases()
-                            dropdown_bm = ui.select(options=bm_list, label="Database", value=bm_list[0] if len(bm_list) > 0 else None, on_change=on_change_dropdown_bm)
+                                                    value=db_list[0])
+                            benchmark_list = ["TPC-H 1GB", "TPC-H 10GB", "TPC-DS 1GB", "TPC-DS 10GB"]
+                            dropdown_bm = ui.select(options=benchmark_list, label="Benchmark", value=benchmark_list[0])
                             ui.button(text="Save Query", on_click=on_click_save_query)
-                            database_info()
                         with ui.column():
                             ui.button("Delete Selected")
                             ui.button("Export Queries", on_click=on_click_import_queries)
@@ -251,7 +226,7 @@ async def main_page():
 @ui.page("/analyze")
 async def analyze_page_route():
     navbar()
-    analyze_page(result_table_rows)
+    analyze_page()
 
 
 def init(fastapi_app: FastAPI) -> None:

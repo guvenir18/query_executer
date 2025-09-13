@@ -36,7 +36,7 @@ upload_table_rows = []
 upload_list = []
 
 
-def analyze_page(backend_service: BackendService):
+def analyze_page():
     # TODO: Read filters from first entry
     # TODO: Separate Upload and current query tables. Current tables must be fetched from BackendService.ResultStorage
     #       Maybe single table better ?
