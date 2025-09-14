@@ -122,6 +122,7 @@ async def main_page():
                 for variable in variables:
                     with ui.column():
                         var_name = variable.get("name")
+                        # TODO: Implement support for Postgres and DuckDB here
                         min_value, max_value = get_min_max_of_column(db_clients_local["MySQL"], var_name)
                         ui.label(
                             f"Range values for Parameter: {var_name}, Type: {variable.get("data_type")}")
