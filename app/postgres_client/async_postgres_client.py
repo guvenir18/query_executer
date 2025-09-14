@@ -29,6 +29,25 @@ class AsyncPostgresClient:
             await self.conn.rollback()
             return None, 0
 
+    async def analyze_query(self, query: str):
+        """
+        Execute the given SQL query asynchronously.
+        :param query: SQL query to execute.
+        :return: (results, time_taken)
+        """
+        query = f"EXPLAIN (ANALYZE, BUFFERS, VERBOSE) {query}"
+        try:
+            async with self.conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(query)
+                result = await cur.fetchall()
+                text = "\n".join(r['QUERY PLAN'] for r in result)
+                print(text)
+                return text
+        except Exception as e:
+            print("Query failed:", e)
+            await self.conn.rollback()
+            return None, 0
+
     async def get_size_of_database(self, database: str):
         """
         Get the size (in MB) of the given PostgreSQL database.

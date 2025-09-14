@@ -1,9 +1,7 @@
 from nicegui import ui, events
 import json
 
-from app.backend_service import BackendService
-from app.sampling_methods import adaptive_balanced_sampling
-from app.sampling_methods.adaptive_balanced_sampling import sample_adaptive_balanced, _coerce_numeric
+from app.sampling_methods.adaptive_balanced_sampling import sample_adaptive_balanced
 from app.sampling_methods.calculate_qerr import fit_polynomial_on_sample, predict_and_qerr_for_all, summarize_qerr
 from app.sampling_methods.stratified_time_sampling import sample_stratified
 from app.ui.analyze.helpers import load_runtime_from_json, extract_filters

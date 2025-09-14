@@ -2,7 +2,10 @@ import asyncio
 from asyncio import Queue
 from typing import Dict, List, Callable
 
-from app.analyze_parsers import parse_analyze_mysql, extract_total_runtime, extract_runtime_and_filter_scans_duckdb
+from psycopg_pool import AsyncConnectionPool
+
+from app.analyze_parsers import parse_analyze_mysql, extract_total_runtime, extract_runtime_and_filter_scans_duckdb, \
+    extract_runtime_and_filter_scans_postgres
 from app.config import load_config
 from app.duckdb_client.duckdb_client import DuckDbClient
 from app.helpers import build_all_queries
@@ -109,7 +112,7 @@ class DatabaseQueueWorker:
     async def run_postgres_task(self, queries, benchmark_query):
         async with self.semaphore:
             try:
-                async with self.postgres_pool.acquire() as conn:
+                async with self.postgres_pool.connection() as conn:
                     client = AsyncPostgresClient(conn)
                     await self.callback(queries, benchmark_query, client)
             except Exception as e:
@@ -163,16 +166,6 @@ class BackendService:
         self.queue_worker = DatabaseQueueWorker(self.execute_query_batch)
         await self.queue_worker.init()
 
-    async def execute_query(self, query, db_type):
-        def run_sync():
-            sync_result = self.clients[db_type].analyze_query(query)
-            print(sync_result)
-            return sync_result[0]
-
-        result = await asyncio.to_thread(run_sync)
-        print(result)
-        return result
-
     def set_table_update_callback(self, callback):
         self.callback_table_update = callback
 
@@ -223,8 +216,9 @@ class BackendService:
                 parsed_result = parse_analyze_mysql(result, var_list)
                 total_runtime = extract_total_runtime(result)
             elif benchmark_query.database == "Postgres":
-                print("No postgres support")
-                pass
+                postgres_parsed = extract_runtime_and_filter_scans_postgres(result, var_list)
+                total_runtime = postgres_parsed["total_runtime"]
+                parsed_result = postgres_parsed["filters"]
             elif benchmark_query.database == "DuckDB":
                 duck_parsed = extract_runtime_and_filter_scans_duckdb(result, var_list)
                 total_runtime = duck_parsed["total_runtime"]
